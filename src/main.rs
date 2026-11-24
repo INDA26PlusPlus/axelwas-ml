@@ -85,8 +85,8 @@ fn print_image(img: Vec<f32>) {
 fn calculate_loss(model: &Model, examples: Data) -> f32 {
 
     let mut sum: f64 = 0.0;
-    for _ in 0..2000 {
-        let example_n = rand::random_range(0..examples.len());
+    for n in 0..5000 {
+        let example_n = n;//rand::random_range(0..examples.len());
         let pic = ArrayView::from_shape((28 * 28, 1), examples[example_n].0).unwrap();
         
         let res = predict(pic, &model);
@@ -94,7 +94,7 @@ fn calculate_loss(model: &Model, examples: Data) -> f32 {
         sum += val as f64;
     }
 
-    (sum / 2000.0) as f32
+    (sum / 5000.0) as f32
 
 
 } 
@@ -156,11 +156,21 @@ fn main() {
 
     let mut models: [Model; 200] = std::array::from_fn(|_| random_parameters());
 
+    let mut last_loss = 1.0;
+    let mut diff = 0.2;
     for _ in 0..100000 {
         let index_best = best_model(&models, &combined);
         let best = &models[index_best];
-        println!("{}", calculate_loss(&best, &combined));
-        models = std::array::from_fn(|i| if i == 0 { best.clone() } else { mutate(&best, 0.0001)});
+        let now_loss = calculate_loss(&best, &combined);
+        println!("{}", now_loss);
+
+        if now_loss == last_loss {
+            println!("evolution is now slower");
+            diff = diff * 0.98;
+        }
+        last_loss = now_loss;
+
+        models = std::array::from_fn(|i| if i == 0 { best.clone() } else { mutate(&best, 0.1)});
 
     }
     
