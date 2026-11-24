@@ -1,7 +1,14 @@
+use core::f32;
+use rayon::prelude::*;
+
 use mnist::*;
 use ndarray::prelude::*;
 
 type Matrix = ArrayBase<ndarray::OwnedRepr<f32>, Dim<[usize; 2]>, f32>;
+
+type MatrixBorrow<'a> = ArrayBase<ndarray::ViewRepr<&'a f32>, Dim<[usize; 2]>, f32>;
+type Model = (Matrix, Matrix);
+type Data<'a> = &'a [(&'a [f32], usize)];
 
 fn relu(val: f32) -> f32 {
     if val > 0.0 {
@@ -11,30 +18,51 @@ fn relu(val: f32) -> f32 {
     val * -0.125
 }
 
-fn predict(shape: Matrix, parameters: (Matrix, Matrix)) -> [f32; 10] {
-    let product = shape.dot(&parameters.0);
-    let relued = product.map(|v| relu(*v));
-    let result = relued.dot(&parameters.1);
-    
-    todo!();
+fn softmax(nums: [f32; 10]) -> [f32; 10] {
+    let mut max = -100000000.0;
+    for n in &nums {
+        if max < *n {
+            max = *n;
+        }
+    }
+
+    let exps = nums.into_iter().map(|v| (v - max).exp());
+    let total: f32 = exps.clone().sum();
+    let mut ret = exps.map(|v| v / total);
+
+    [ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap(), ret.next().unwrap()]
 }
 
-fn randomParameters() -> (Matrix, Matrix) {
+fn predict(shape: MatrixBorrow, parameters: &Model) -> [f32; 10] {
+    let product = parameters.0.dot(&shape);
+    let relued = product.map(|v| relu(*v));
+    let result = parameters.1.dot(&relued);
+    
+    let mut iter = result.into_iter();
+    let raw = [iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap()];
+    softmax(raw)
+}
+
+fn mutate(parent: &Model, delta: f32) -> Model {
+    (parent.0.map(|v| *v - rand::random_range(-delta..delta)), parent.1.map(|v| *v - rand::random_range(-delta..delta)))
+}
+
+fn random_parameters() -> Model {
     const SIZE: usize = 28 * 28;
 
-    let generator = || rand::random_range(-5.0..5.0);
+    let generator = || rand::random_range(-1.1..1.1);
     let mut first_matrix = vec![];
-    for n in 0..(SIZE * 28) {
+    for _ in 0..(SIZE * 28) {
         first_matrix.push(generator());
     }
 
-    let big = Array2::from_shape_vec((SIZE, 28), first_matrix).unwrap();
+    let big = Array2::from_shape_vec((28, SIZE), first_matrix).unwrap();
 
     let mut second_matrix = vec![];
-    for n in 0..(28 * 10) {
+    for _ in 0..(28 * 10) {
         second_matrix.push(generator());
     }  
-    let small = Array2::from_shape_vec((28, 10), second_matrix).unwrap();
+    let small = Array2::from_shape_vec((10, 28), second_matrix).unwrap();
     
     (big, small)
 }
@@ -54,6 +82,51 @@ fn print_image(img: Vec<f32>) {
     }
 }
 
+fn calculate_loss(model: &Model, examples: Data) -> f32 {
+
+    let mut sum: f64 = 0.0;
+    for _ in 0..2000 {
+        let example_n = rand::random_range(0..examples.len());
+        let pic = ArrayView::from_shape((28 * 28, 1), examples[example_n].0).unwrap();
+        
+        let res = predict(pic, &model);
+        let val = 1.0 - res[examples[example_n].1];
+        sum += val as f64;
+    }
+
+    (sum / 2000.0) as f32
+
+
+} 
+
+fn train_data_into_vec(trn_img: Vec<u8>) -> Vec<Vec<f32>> {
+    let mut ret = vec![];
+    for n in 0..50_000 {
+        let mut img = vec![];
+        for m in 0..(28 * 28) {
+            img.push(trn_img[n * 28 * 28 + m] as f32 / 256.0);
+        }
+        ret.push(img);
+    }
+    ret
+}
+
+fn best_model(models: &[Model], data: Data) -> usize {
+    let mut index = 0;
+    let mut loss = 1.0;
+
+    let after: Vec<(usize, f32)> = models.par_iter().enumerate().map(|(i, m)| (i, calculate_loss(m, data))).collect();
+
+    for (i, r) in after {
+        if r < loss {
+            loss = r;
+            index = i;
+        }
+    }
+
+    return index;
+}
+
 fn main() {
     // Deconstruct the returned Mnist struct.
     let Mnist {
@@ -69,24 +142,30 @@ fn main() {
         .test_set_length(10_000)
         .finalize();
 
-    let image_num = 0;
-    // Can use an Array2 or Array3 here (Array3 for visualization)
-    let train_data = Array2::from_shape_vec((50_000, 28 * 28), trn_img)
-        .expect("Error converting images to Array3 struct")
-        .map(|x| *x as f32 / 256.0);
-    println!("{:#.1?}\n",train_data.slice(s![image_num, ..]));
+    let train_data = train_data_into_vec(trn_img);
 
-    let first_image = train_data.slice(s![image_num, ..]);
-    println!("{:#.1?}", first_image);
-    print_image(first_image.iter().map(|f| *f).collect());
 
 
     // Convert the returned Mnist struct to Array2 format
-    let train_labels: Array2<f32> = Array2::from_shape_vec((50_000, 1), trn_lbl)
-        .expect("Error converting training labels to Array2 struct")
-        .map(|x| *x as f32);
-    println!("The first digit is a {:?}",train_labels.slice(s![image_num, ..]) );
+    let train_labels: Vec<usize> = trn_lbl
+        .iter()
+        .map(|x| *x as usize)
+        .collect();
+    
+    let combined: Vec<_> = train_data.iter().zip(train_labels).map(|s| (s.0.as_slice(), s.1)).collect();
 
+    let mut models: [Model; 200] = std::array::from_fn(|_| random_parameters());
+
+    for _ in 0..100000 {
+        let index_best = best_model(&models, &combined);
+        let best = &models[index_best];
+        println!("{}", calculate_loss(&best, &combined));
+        models = std::array::from_fn(|i| if i == 0 { best.clone() } else { mutate(&best, 0.0001)});
+
+    }
+    
+
+    return;
     let _test_data = Array3::from_shape_vec((10_000, 28, 28), tst_img)
         .expect("Error converting images to Array3 struct")
         .map(|x| *x as f32 / 256.);
