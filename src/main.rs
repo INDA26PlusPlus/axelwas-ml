@@ -85,7 +85,7 @@ fn print_image(img: Vec<f32>) {
 fn calculate_loss(model: &Model, examples: Data) -> f32 {
 
     let mut sum: f64 = 0.0;
-    for n in 0..5000 {
+    for n in 0..20000 {
         let example_n = n;//rand::random_range(0..examples.len());
         let pic = ArrayView::from_shape((28 * 28, 1), examples[example_n].0).unwrap();
         
@@ -94,7 +94,7 @@ fn calculate_loss(model: &Model, examples: Data) -> f32 {
         sum += val as f64;
     }
 
-    (sum / 5000.0) as f32
+    (sum / 20000.0) as f32
 
 
 } 
