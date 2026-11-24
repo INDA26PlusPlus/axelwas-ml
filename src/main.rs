@@ -1,7 +1,7 @@
 use mnist::*;
 use ndarray::prelude::*;
 
-type Matrix<'a> = ArrayBase<ndarray::ViewRepr<&'a f32>, Dim<[usize; 2]>, f32>;
+type Matrix = ArrayBase<ndarray::OwnedRepr<f32>, Dim<[usize; 2]>, f32>;
 
 fn relu(val: f32) -> f32 {
     if val > 0.0 {
@@ -20,27 +20,41 @@ fn predict(shape: Matrix, parameters: (Matrix, Matrix)) -> [f32; 10] {
 }
 
 fn randomParameters() -> (Matrix, Matrix) {
-    const SIZE = 28 * 28;
+    const SIZE: usize = 28 * 28;
 
+    let generator = || rand::random_range(-5.0..5.0);
+    let mut first_matrix = vec![];
+    for n in 0..(SIZE * 28) {
+        first_matrix.push(generator());
+    }
+
+    let big = Array2::from_shape_vec((SIZE, 28), first_matrix).unwrap();
+
+    let mut second_matrix = vec![];
+    for n in 0..(28 * 10) {
+        second_matrix.push(generator());
+    }  
+    let small = Array2::from_shape_vec((28, 10), second_matrix).unwrap();
     
-    
+    (big, small)
 }
 
 
+fn print_image(img: Vec<f32>) {
+    for (i, item) in img.iter().enumerate() {
+        if i % 28 == 0 {
+            println!();
+        }
+        print!("{}", match item {
+            0.0..0.1 => ' ',
+            0.1..0.7 => 'o',
+            0.7..=1.0 => '#',
+            _ => panic!()
+        });
+    }
+}
+
 fn main() {
-    let l: ArrayBase<ndarray::ViewRepr<&f32>, Dim<[usize; 2]>, f32> = ArrayView::from_shape((3, 1), &[1.0_f32, 2.0, 3.0]).unwrap();
-
-    let m: ArrayBase<ndarray::ViewRepr<&f32>, Dim<[usize; 2]>, f32> = ArrayView::from_shape((3, 3), &[1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]).unwrap();
-    let res = m.dot(&l);
-
-    println!("{:?}", m.dot(&l));
-    println!("{:?}", res.get((0, 0)));
-
-    // println!("{:?}", s.dot(&l));
-
-    // println!("{:?}", s);
-
-    return;
     // Deconstruct the returned Mnist struct.
     let Mnist {
         trn_img,
@@ -57,11 +71,14 @@ fn main() {
 
     let image_num = 0;
     // Can use an Array2 or Array3 here (Array3 for visualization)
-    let train_data = Array3::from_shape_vec((50_000, 28, 28), trn_img)
+    let train_data = Array2::from_shape_vec((50_000, 28 * 28), trn_img)
         .expect("Error converting images to Array3 struct")
         .map(|x| *x as f32 / 256.0);
-    println!("{:#.1?}\n",train_data.slice(s![image_num, .., ..]));
+    println!("{:#.1?}\n",train_data.slice(s![image_num, ..]));
 
+    let first_image = train_data.slice(s![image_num, ..]);
+    println!("{:#.1?}", first_image);
+    print_image(first_image.iter().map(|f| *f).collect());
 
 
     // Convert the returned Mnist struct to Array2 format
