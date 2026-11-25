@@ -1,0 +1,1 @@
+after 1000 generations there was a loss of 0.12597 or 87% of numbers are dected correctly. This what done with a genetic approch, after some trile and error to decide how the learning rate should change with time. 

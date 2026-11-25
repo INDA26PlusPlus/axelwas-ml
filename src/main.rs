@@ -82,10 +82,10 @@ fn print_image(img: Vec<f32>) {
     }
 }
 
-fn calculate_loss(model: &Model, examples: Data) -> f32 {
+fn calculate_loss(model: &Model, examples: Data, until: usize) -> f32 {
 
     let mut sum: f64 = 0.0;
-    for n in 0..20000 {
+    for n in 0..until {
         let example_n = n;//rand::random_range(0..examples.len());
         let pic = ArrayView::from_shape((28 * 28, 1), examples[example_n].0).unwrap();
         
@@ -94,14 +94,14 @@ fn calculate_loss(model: &Model, examples: Data) -> f32 {
         sum += val as f64;
     }
 
-    (sum / 20000.0) as f32
+    (sum / until as f64) as f32
 
 
 } 
 
-fn train_data_into_vec(trn_img: Vec<u8>) -> Vec<Vec<f32>> {
+fn train_data_into_vec(trn_img: Vec<u8>, length: usize) -> Vec<Vec<f32>> {
     let mut ret = vec![];
-    for n in 0..50_000 {
+    for n in 0..length {
         let mut img = vec![];
         for m in 0..(28 * 28) {
             img.push(trn_img[n * 28 * 28 + m] as f32 / 256.0);
@@ -115,7 +115,7 @@ fn best_model(models: &[Model], data: Data) -> usize {
     let mut index = 0;
     let mut loss = 1.0;
 
-    let after: Vec<(usize, f32)> = models.par_iter().enumerate().map(|(i, m)| (i, calculate_loss(m, data))).collect();
+    let after: Vec<(usize, f32)> = models.par_iter().enumerate().map(|(i, m)| (i, calculate_loss(m, data, 25000))).collect();
 
     for (i, r) in after {
         if r < loss {
@@ -142,7 +142,7 @@ fn main() {
         .test_set_length(10_000)
         .finalize();
 
-    let train_data = train_data_into_vec(trn_img);
+    let train_data = train_data_into_vec(trn_img, 50_000);
 
 
 
@@ -155,13 +155,15 @@ fn main() {
     let combined: Vec<_> = train_data.iter().zip(train_labels).map(|s| (s.0.as_slice(), s.1)).collect();
 
     let mut models: [Model; 200] = std::array::from_fn(|_| random_parameters());
+    let mut best_clone = models[0].clone();
 
     let mut last_loss = 1.0;
     let mut diff = 0.2;
-    for _ in 0..100000 {
+    for _ in 0..1000 {
         let index_best = best_model(&models, &combined);
         let best = &models[index_best];
-        let now_loss = calculate_loss(&best, &combined);
+        best_clone = models[index_best].clone();
+        let now_loss = calculate_loss(&best, &combined, 25000);
         println!("{}", now_loss);
 
         if now_loss == last_loss {
@@ -174,14 +176,14 @@ fn main() {
 
     }
     
+    let test_data = train_data_into_vec(tst_img, 10_000);
+    let test_labels: Vec<usize> = tst_lbl
+        .iter()
+        .map(|x| *x as usize)
+        .collect();
 
-    return;
-    let _test_data = Array3::from_shape_vec((10_000, 28, 28), tst_img)
-        .expect("Error converting images to Array3 struct")
-        .map(|x| *x as f32 / 256.);
+    let combined: Vec<_> = test_data.iter().zip(test_labels).map(|s| (s.0.as_slice(), s.1)).collect();
 
-    let _test_labels: Array2<f32> = Array2::from_shape_vec((10_000, 1), tst_lbl)
-        .expect("Error converting testing labels to Array2 struct")
-        .map(|x| *x as f32);
+    println!("loss on test images: {}", calculate_loss(&best_clone, &combined, 10000));
     
 }
