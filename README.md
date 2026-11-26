@@ -1,1 +1,3 @@
-after 1000 generations there was a loss of 0.12597 or 87% of numbers are dected correctly. This what done with a genetic approch, after some trile and error to decide how the learning rate should change with time. 
+after 1000 generations there was a loss of 0.12597 or 87% of numbers are dected correctly. This what done with a genetic approch, after some trile and error to decide how the learning rate should change with time. This method has two layers, one that reduces the whole images to 28 middle vectors, and then those 28 to the final guess. 
+
+To improve this I tried adding a biaa to the middle 28 layers. This has not beeen tested yet.
