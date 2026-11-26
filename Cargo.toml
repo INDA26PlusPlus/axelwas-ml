@@ -11,3 +11,6 @@ rayon = "1.12.0"
 
 [profile.release]
 debug = true
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]

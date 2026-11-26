@@ -162,11 +162,11 @@ fn train_data_into_vec(trn_img: Vec<u8>, length: usize) -> Vec<Vec<f32>> {
     ret
 }
 
-fn best_model(models: &[Model], data: Data) -> usize {
+fn best_model(models: &[Model], data: Data, until: usize) -> usize {
     let mut index = 0;
     let mut loss = 1.0;
 
-    let after: Vec<(usize, f32)> = models.par_iter().enumerate().map(|(i, m)| (i, calculate_loss(m, data, 25000))).collect();
+    let after: Vec<(usize, f32)> = models.par_iter().enumerate().map(|(i, m)| (i, calculate_loss(m, data, until))).collect();
 
     for (i, r) in after {
         if r < loss {
@@ -210,11 +210,15 @@ fn main() {
 
     let mut last_loss = 1.0;
     let mut diff = 0.2;
-    for _ in 0..500 {
-        let index_best = best_model(&models, &combined);
+    let mut until = 100;
+    for i in 0..1100 {
+        if i % 10 == 0 {
+            until = (until as f64 * (25000.0 - 100.0 as f64).powf(1.0/100.0 as f64) as f64) as usize;
+        }
+        let index_best = best_model(&models, &combined, until);
         let best = &models[index_best];
         best_clone = models[index_best].clone();
-        let now_loss = calculate_loss(&best, &combined, 25000);
+        let now_loss = calculate_loss(&best, &combined, until);
         println!("{}", now_loss);
 
         if now_loss == last_loss {
