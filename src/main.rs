@@ -1,5 +1,5 @@
 use core::f32;
-use std::ops::Add;
+use std::{ops::Add, os::unix::raw::nlink_t};
 use rayon::prelude::*;
 
 use mnist::*;
@@ -121,7 +121,34 @@ fn calculate_loss(model: &Model, examples: Data, until: usize) -> f32 {
     (sum / until as f64) as f32
 
 
-} 
+}
+
+fn calculate_right(model: &Model, examples: Data, until: usize) -> f32 {
+
+    let mut sum: usize = 0;
+    for n in 0..until {
+        let example_n = n;//rand::random_range(0..examples.len());
+        let pic = ArrayView::from_shape((28 * 28, 1), examples[example_n].0).unwrap();
+        
+        let res = predict(pic, &model);
+        let mut val_max = -1.0;
+        let mut index_max = 0;
+        for (i, n) in res.iter().enumerate() {
+            if *n > val_max {
+                val_max = *n;
+                index_max = i;
+            }
+        }
+
+        if index_max == examples[example_n].1 {
+            sum = sum + 1;
+        }
+    }
+
+    (sum as f64 / until as f64) as f32
+
+
+}
 
 fn train_data_into_vec(trn_img: Vec<u8>, length: usize) -> Vec<Vec<f32>> {
     let mut ret = vec![];
@@ -208,6 +235,6 @@ fn main() {
 
     let combined: Vec<_> = test_data.iter().zip(test_labels).map(|s| (s.0.as_slice(), s.1)).collect();
 
-    println!("loss on test images: {}", calculate_loss(&best_clone, &combined, 10000));
+    println!("loss on test images: {}. Correctness: {}", calculate_loss(&best_clone, &combined, 10000), calculate_right(&best_clone, &combined, 10000));
     
 }
