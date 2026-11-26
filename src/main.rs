@@ -1,4 +1,5 @@
 use core::f32;
+use std::ops::Add;
 use rayon::prelude::*;
 
 use mnist::*;
@@ -7,7 +8,13 @@ use ndarray::prelude::*;
 type Matrix = ArrayBase<ndarray::OwnedRepr<f32>, Dim<[usize; 2]>, f32>;
 
 type MatrixBorrow<'a> = ArrayBase<ndarray::ViewRepr<&'a f32>, Dim<[usize; 2]>, f32>;
-type Model = (Matrix, Matrix);
+
+#[derive(Debug, Clone)]
+struct Model {
+    first_layer: Matrix,
+    bias: Matrix,
+    final_layer: Matrix
+}
 type Data<'a> = &'a [(&'a [f32], usize)];
 
 fn relu(val: f32) -> f32 {
@@ -34,9 +41,10 @@ fn softmax(nums: [f32; 10]) -> [f32; 10] {
 }
 
 fn predict(shape: MatrixBorrow, parameters: &Model) -> [f32; 10] {
-    let product = parameters.0.dot(&shape);
+    let product = parameters.first_layer.dot(&shape);
+    let product = product.add(&parameters.bias);
     let relued = product.map(|v| relu(*v));
-    let result = parameters.1.dot(&relued);
+    let result = parameters.final_layer.dot(&relued);
     
     let mut iter = result.into_iter();
     let raw = [iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap(), iter.next().unwrap()];
@@ -44,7 +52,11 @@ fn predict(shape: MatrixBorrow, parameters: &Model) -> [f32; 10] {
 }
 
 fn mutate(parent: &Model, delta: f32) -> Model {
-    (parent.0.map(|v| *v - rand::random_range(-delta..delta)), parent.1.map(|v| *v - rand::random_range(-delta..delta)))
+    Model { 
+        first_layer: parent.first_layer.map(|v| *v - rand::random_range(-delta..delta)), 
+        bias: parent.bias.map(|v| *v - rand::random_range(-delta..delta)), 
+        final_layer: parent.final_layer.map(|v| *v - rand::random_range(-delta..delta)) 
+    }
 }
 
 fn random_parameters() -> Model {
@@ -64,7 +76,19 @@ fn random_parameters() -> Model {
     }  
     let small = Array2::from_shape_vec((10, 28), second_matrix).unwrap();
     
-    (big, small)
+    let mut bias = vec![];
+
+    for _ in 0..(28) {
+        bias.push(generator());
+    }  
+
+    let bias = Array2::from_shape_vec((28, 1), bias).unwrap();
+
+    Model {
+        first_layer: big,
+        final_layer: small,
+        bias: bias
+    }
 }
 
 
@@ -159,7 +183,7 @@ fn main() {
 
     let mut last_loss = 1.0;
     let mut diff = 0.2;
-    for _ in 0..1000 {
+    for _ in 0..500 {
         let index_best = best_model(&models, &combined);
         let best = &models[index_best];
         best_clone = models[index_best].clone();
