@@ -213,13 +213,16 @@ fn main() {
     let mut until = 100;
     for i in 0..1100 {
         if i % 10 == 0 {
-            until = (until as f64 * (25000.0 - 100.0 as f64).powf(1.0/100.0 as f64) as f64) as usize;
+            until = (until as f64 * (25000.0 - 100.0 as f64).powf(1.0/110.0 as f64) as f64) as usize;
+            if until >= 50000 {
+                until = 49999;
+            }
         }
         let index_best = best_model(&models, &combined, until);
         let best = &models[index_best];
         best_clone = models[index_best].clone();
         let now_loss = calculate_loss(&best, &combined, until);
-        println!("{}", now_loss);
+        println!("{} nr {}", now_loss, i);
 
         if now_loss == last_loss {
             println!("evolution is now slower");
